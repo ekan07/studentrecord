@@ -1,6 +1,4 @@
+from models.engine.db_storage import dbstorage
 
-from models.engine import db_storage
-# from studentrecord import app
-
-storage = db_storage.mysqlconnect
-# storage = storage
+# Function For Connecting To Database
+storage = dbstorage
