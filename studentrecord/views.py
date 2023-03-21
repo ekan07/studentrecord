@@ -15,9 +15,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from studentrecord.helpers import login_required, allowed_image_filesize, allowed_image, reg_pool, email_address_valid, e_message, asign_classcode, school_session
 from werkzeug.utils import secure_filename
 #####
+# from models.engine.db_storage import mysqlconnect
 from models import storage
 # used to protect against SQL injection attempts
-from MySQLdb import escape_string as thwart
+# from MySQLdb import escape_string as thwart
 
 
 
@@ -64,39 +65,76 @@ SUBJECTS = {
     "SOS": "Social Studies",
 }
 
-# Create views:
-
 
 @app.route("/")
-# @login_required
+@login_required
 def index():
     """ List of class(es) Asign to a teacher """
-    db_curs = storage()[0]
+    db_connect= storage()
+    db_curs = db_connect.cursor()
+
     userid = session["user_id"]
+    print(userid)
     # Query class(es) asigned to teacher
     db_curs.execute("SELECT * FROM classes WHERE id IN (SELECT class_id FROM students WHERE class_id IN (SELECT class_id FROM teachers WHERE userid = %s)) AND id IN (SELECT currentclass_id FROM class_details) ORDER BY class_name",
-                         thwart(userid,))
+                         (userid,))
     classes = db_curs.fetchall()
+    db_connect.close()
     db_curs.close()
     # db.close()
     return render_template("/index.html", classes=classes)
 
-    # try:
-    #     curs, db_connect = storage()
-    #     # Executing Query
-    #     curs.execute("SELECT CURDATE();")
-    #     # Above Query Gives Us The Current Date
-    #     # Fetching Data
-    #     m = curs.fetchone()
 
-    #     # Printing Result Of Above
-    #     print("Today's Date Is ", m[0])
-    #     # Closing Database Connection
-    #     db_connect.close()
-    #     # return("okay")
-    # except:
-    #     print("Can't connect to database")
-    # return 0
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Log user in"""
+
+    # Forget any user_id
+    session.clear()
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+        missing = list()
+        # Ensure username and password are filled in
+        for k, v in request.form.items():
+            if not v:
+                missing.append(k)
+        if missing:
+            feedback = f"Missing fields for {', '.join(missing)}"
+            flash(feedback, "danger")
+            return render_template("login.html")
+        
+        # Query database for username
+        db_connect= storage()
+        db_curs = db_connect.cursor()
+        db_curs.execute("SELECT * FROM users WHERE username = %s",
+                          (request.form.get("username"),))
+        row = db_curs.fetchone()
+        db_curs.close()
+        db_connect.close()
+        # Ensure username exists:
+        if row == None:
+            # missing.append("username and/or password not correct")
+            feedback = f"username and/or password not correct"
+            flash(feedback, "danger")
+            return render_template("login.html")
+        # Ensure username exists and password is correct
+        if row[1] and not check_password_hash(row[2], request.form.get("password")):
+            # missing.append("username and/or password not correct")
+            feedback = f"username and/or password not correct"
+            flash(feedback, "danger")
+            return render_template("login.html")
+        # Remember which user has logged in
+        session["user_id"] = row[0]
+
+        print("\nRedirect to home page\n")
+
+        # Redirect user to home page
+        return redirect("/")
+    else:
+
+        print("\nRedirect to login\n")
+
+        return render_template("login.html")
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -131,26 +169,44 @@ def signup():
             return render_template("signup.html")
 
         # Query database for username
-        db_curs, db_connect = storage()
-        # db_curs = db_connect.cursor()
-        rows =db_curs.execute("SELECT * FROM users WHERE username = %s", (thwart(username),))
-        # Check if username not equal to None then username exists
-        if len(rows) == 1:
-            missing.append(rows[0]['username'])
-            feedback = f"username {''.join(missing)} exist already!"
-            flash(feedback, "danger")
-            return render_template("signup.html")
-        # Check if passwords matches
-        if password != request.form.get("confirmation"):
-            # missing.append("passwords didn't matched")
-            feedback = f"passwords didn't matched"
-            flash(feedback, "danger")
-            return render_template("signup.html")
-        # Hash the password and insert the new user into users database table
-        hash = generate_password_hash(password)
-        primary_key = db_curs.execute(
-            "INSERT INTO users (username, password_hash) VALUES(%s, %s)", (thwart(username), thwart(hash)))
-        # Login the newly registered user and remember which user has logged in
-        session["user_id"] = primary_key
-        flash("signed up!", "success")
-        return redirect("/")
+        db_connect = storage()
+        with db_connect.cursor() as db_curs:
+            # db_curs = db_connect.cursor()
+            db_curs.execute("SELECT * FROM users WHERE username = %s", (username,))
+            row = db_curs.fetchone()
+            if row == None:
+                # Check if passwords matches
+                if password != request.form.get("confirmation"):
+                    # missing.append("passwords didn't matched")
+                    feedback = f"passwords didn't matched"
+                    flash(feedback, "danger")
+
+                    print('\nNo match\n')
+
+                    return render_template("signup.html")
+                # Hash the password and insert the new user into users database table
+                hash = generate_password_hash(password)
+                db_curs.execute(
+                    "INSERT INTO users (username, password_hash) VALUES(%s, %s)", (username, hash))
+                db_connect.commit()
+                db_curs.execute("SELECT LAST_INSERT_ID()")
+                primary_key = db_curs.fetchone()[0]
+                # Login the newly registered user and remember which user has logged in
+                session["user_id"] = primary_key
+                flash("signed up!", "success")
+
+                print("\nsigned up successfully\n")
+
+                return redirect("/")
+            # Check if username not equal to None then username exists
+            else:
+                if row[1] == username:
+                    missing.append(row[1])
+                    feedback = f"username {''.join(missing)} used already!"
+                    flash(feedback, "danger")
+
+                    print("\nusername exist\n")
+
+                    return render_template("signup.html")
+            
+        
