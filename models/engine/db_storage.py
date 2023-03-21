@@ -25,12 +25,14 @@ def dbstorage():
 
     # Trying to connect
     # try:
-    # db_connection = MySQLdb.connect(host='localhost', port=3306,
-    #                                 user=sys.argv[1], passwd=sys.argv[2], db=sys.argv[3])
+    # db_connect = MySQLdb.connect(host='localhost', port=3306,
+    #                                 user='root', passwd=sys.argv[3], db='studentrecord')
     # db_connection = MySQLdb.connect
     # ("localhost", "root", "", "studentrecord")
     db_connect = MySQLdb.connect(host='localhost',
-                                 user='root', passwd=getpass('Enter password: '), db='studentrecord')
+                                 user=os.environ.get('PORTFOLIO_USER'),
+                                 passwd=os.environ.get('PORTFOLIO_PWD'),
+                                 db='studentrecord')
     # If connection is not successful
     # except:
     # print("Can't connect to database")
@@ -39,7 +41,7 @@ def dbstorage():
     # print("Connected")
 
     # Making Cursor Object For Query Execution
-    db_curs = db_connect.cursor()
+    # db_curs = db_connect.cursor()
     # Executing Query
     # cur.execute("SELECT CURDATE();")
     # Above Query Gives Us The Current Date
@@ -50,7 +52,7 @@ def dbstorage():
     # print("Today's Date Is ", m[0])
     # Closing Database Connection
     # db_connect.close()
-    return db_curs, db_connect
+    return db_connect
 
 
 # Function Call For Connecting To Our Database
