@@ -79,10 +79,268 @@ def index():
     db_curs.execute("SELECT * FROM classes WHERE id IN (SELECT class_id FROM students WHERE class_id IN (SELECT class_id FROM teachers WHERE userid = %s)) AND id IN (SELECT currentclass_id FROM class_details) ORDER BY class_name",
                          (userid,))
     classes = db_curs.fetchall()
-    db_connect.close()
     db_curs.close()
+    db_connect.close()
     # db.close()
     return render_template("/index.html", classes=classes)
+
+
+@app.route("/download_csv/<int:class_id>", methods=["GET", "POST"])
+@login_required
+def download_csv(class_id):
+    """ download csv files of list of students in a specified class """
+    db_connect= storage()
+    db_curs = db_connect.cursor()
+
+    # Query students in a specified class
+    user_id = session['user_id']
+    id = class_id
+    db_curs.execute("SELECT reg_num as admission_number, surname, othername, gender FROM people JOIN students ON people.id = students.person_id JOIN classes ON students.class_id = classes.id JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s AND classes.id = %s",
+                          (user_id, id))
+    students = db_curs.fetchall()
+    if len(students) == None:
+        return e_message("Not authorized", 404)
+    db_curs.execute("SELECT class_name FROM classes WHERE id = :id", (id,))
+    classRow = db_curs.fetchone()
+    db_curs.close()
+    db_connect.close()
+    # field names
+    fields = ['admission_number', 'surname', 'othername', 'gender']
+    # name for csv file to be created
+    filename = classRow[1] + ".csv"
+    # writing to csv file
+    csv_path = Path("studentrecord", "static", "client", "csv")
+    with open(Path(csv_path, filename), 'w', encoding="utf-8") as csvfile:
+        # creating a csv dict writer object
+        writer = csv.DictWriter(csvfile, fieldnames=fields)
+        # writing headers (field names)
+        writer.writeheader()
+        # writing data rows
+        writer.writerows(students)
+    # Download the csv file
+    return send_from_directory(app.config["CLIENT_CSV"], Path(csv_path, filename), as_attachment=True)
+
+
+@app.route("/<int:class_id>", methods=["GET", "POST"])
+@login_required
+def classStudents(class_id):
+    """ List of students in a class """
+    db_connect= storage()
+    db_curs = db_connect.cursor()
+
+    # Query students in a specified class
+    userid = session['user_id']
+    id = class_id
+    db_curs.execute("SELECT reg_num, surname, othername, gender FROM people JOIN students ON people.id = students.person_id JOIN classes ON students.class_id = classes.id JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s AND classes.id = %s",
+                          (userid, id))
+    students = db_curs.fetchall()
+    db_curs.close()
+    db_connect.close()
+    if len(students) == None:
+        return e_message("Not authorized", 404)
+    return render_template("/classstudents.html", students=students)
+
+
+@app.route("/studentprofile/<int:student_regnum>")
+@login_required
+def studentprofile(student_regnum):
+    """ Display student details on page """
+    db_connect= storage()
+    with db_connect.cursor() as db_curs:
+
+        # Query for student's details
+        reg_num = student_regnum
+        db_curs.execute("SELECT * FROM people JOIN students ON people.id = students.person_id JOIN classes ON students.class_id = classes.id JOIN teachers ON classes.id = teachers.class_id JOIN class_details ON class_details.currentclass_id = classes.id GROUP BY students.reg_num, class_details.currentclass_id HAVING students.reg_num = %s",
+                                    (reg_num,))
+        studentDocument = db_curs.fetchone()
+        if len(studentDocument) == None:
+            return e_message("Invalid url link", 404)
+        db_curs.execute("SELECT * FROM images WHERE regnum_id = %s", (reg_num,))
+        image = db_curs.fetchone()
+        # Use default image if no uploaded picture
+        if len(image) == None:
+            # gender [3]
+            if studentDocument[3].lower() == 'female':
+                # Image storage path
+                imgFilePath = "img/default/female.png"
+            elif studentDocument[3].lower() == 'male':
+                # Image storage path
+                imgFilePath = "img/default/male.jpg"
+        else:
+            # Split the extension from the filename (mimetype [3])
+            img_exsn = image[3]["mimetype"].rsplit("/", 1)[1]
+            # Image storage path (regnum_id [1])
+            imgFilePath = "img/uploads/basic/" + \
+                str(image[1]) + "." + img_exsn
+            # Write image to storage path (image [2])
+            with open("studentrecord/static/" + imgFilePath, "wb") as file:
+                file.write(image[2])
+        
+        entryclass_id = studentDocument[20]["entryclass_id"],
+        db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
+                                (entryclass_id,))
+        entryClass = db_curs.fetchone()
+
+        currentclass_id = studentDocument[21]
+        db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
+                                (currentclass_id,))
+        currentClass = db_curs.fetchone()
+
+        regnum_id=student_regnum
+        db_curs.execute("SELECT * FROM guardians WHERE regnum_id = :regnum_id", (regnum_id,))
+        guardian = db_curs.fetchone()
+
+    db_connect.close()
+    return render_template("/studentprofile.html", imgfile=imgFilePath, studentdocument=studentDocument[0], entryclass=entryClass,
+                           currentclass=currentClass, guardian=guardian)
+
+
+@app.route("/asign_classteacher", methods=["GET", "POST"])
+@login_required
+def asign_classteacher():
+    """ Asign class to teacher """
+
+    if request.method == "POST":
+        className = request.form.get("classname")
+        missing = list()
+        # Ensure field(s) was submitted (key : value):
+        # -------------------------------------------
+        for k, v in request.form.items():
+            if not v:
+                missing.append(k)
+        if missing:
+            flash(f"Missing fields for {', '.join(missing)}", "danger")
+            return redirect("/asign_classteacher")
+
+        if className == None:
+            flash("Please select class name", "danger")
+            return redirect("/asign_classteacher")
+        # Ensure that class name exist
+        if className not in CLASSNAMES:
+            return e_message("Invalid Class Name", 404)
+        
+        # ALX: change this classID to classcode
+        classID = int(asign_classcode(className))
+
+        db_connect= storage()
+        with db_connect.cursor() as db_curs:
+            # db_curs = db_connect.cursor()
+            # Ensure class exist and teacher is not asign to a particular class more than once:
+            db_curs.execute(
+                "SELECT * FROM classes WHERE class_name = %s", (className,))
+            classRow = db_curs.fetchone()
+            userid = session['user_id']
+            if len(classRow) != None:
+                class_id = classRow[0]
+                db_curs.execute("SELECT * FROM teachers WHERE class_id = %s AND userid = %s",
+                                        (class_id, userid))
+                teacherRows = db_curs.fetchone()
+                if len(teacherRows) != None:
+                    # 'class_name' [1]
+                    flash(f"{classRow[1]} already asigned", "danger")
+                    return redirect("/asign_classteacher")
+                else:
+                    # Asign class to teacher
+                    db_curs.execute("INSERT INTO teachers (class_id, userid) VALUES(%s, %s)",
+                            (class_id, userid))
+                    db_curs.commit()
+                    flash(f"{classRow[1]} asigned", "success")
+                    return redirect("/")
+            else:
+                # Asign class
+                id = classID
+                class_name = className
+                db_curs.execute("INSERT INTO classes (id, class_name) VALUES(%s, %s)",
+                        (id, class_name))
+                # Asign class to teacher
+                db_curs.execute("INSERT INTO teachers (class_id, userid) VALUES(%s, %s)",
+                        (id, userid))
+                db_curs.commit()
+                flash(f"{className} asigned", "success")
+                return redirect("/")
+
+    classnames = CLASSNAMES
+    # asign_classcode(classname)
+    return render_template("/classteacher.html", classnames=classnames)
+
+
+@app.route("/bsubjects")
+@login_required
+def bsubjects():
+    """ Get class(es) asigned to teacher """
+    
+    db_connect= storage()
+    with db_connect.cursor() as db_curs:
+        userid=session["user_id"]
+        # Get class(es) asigned to teacher
+        db_curs.execute("SELECT class_name FROM classes JOIN teachers ON classes.id = teachers.class_id JOIN class_details ON class_details.currentclass_id = classes.id WHERE teachers.userid = %s GROUP BY class_details.currentclass_id",
+                            (userid,))
+        classRows = db_curs.fetchone()
+        ASIGNEDCLASSES = []
+        for classRow in classRows:
+            for classname in CLASSNAMES:
+                # "class_name"
+                if classRow[0] == classname:
+                    ASIGNEDCLASSES.append(classname)
+    return render_template("/bsubjects.html", asignedclasses=ASIGNEDCLASSES, subjects=SUBJECTS)
+
+
+@app.route("/bsubject", methods=["GET", "POST"])
+@login_required
+def bsubject():
+    """ Asign subject to a class """
+    db_connect= storage()
+    db_curs = db_connect.cursor()
+
+    if request.method == "POST":
+        # Get class(es) asigned to teacher
+        userid = session["user_id"]
+        db_curs.execute("SELECT classes.id, class_name FROM classes JOIN teachers ON classes.id = teachers.class_id JOIN class_details ON class_details.currentclass_id = classes.id WHERE teachers.userid = :userid GROUP BY class_details.currentclass_id",
+                               (userid,))
+        classRows = db_curs.fetchall()
+        ASIGNEDCLASSES = []
+        for classRow in classRows:
+            # "class_name"
+            if classRow[1] in CLASSNAMES:
+                ASIGNEDCLASSES.append(classRow[1])
+
+        subjectCode = request.form.get("subjectcode")
+        className = request.form.get("classname")
+        # Ensure subject and class name is selected
+        if subjectCode == None:
+            flash(f"Please select subject", "danger")
+            return redirect("/bsubjects")
+        if className == None:
+            flash(f"Please select class name", "danger")
+            return redirect("/bsubjects")
+        # Ensure selected subject and class name exist in the server
+        if subjectCode not in SUBJECTS:
+            return e_message("Invalid Subject", 404)
+        if className not in ASIGNEDCLASSES:
+            return e_message("Invalid Class Name", 404)
+
+        # Insert data into b_subject table
+        for classRow in classRows:
+            # "class_name"
+            if classRow[1] == className:
+                # Check if subject has been asigned to a class
+                subject_name = SUBJECTS[subjectCode]
+                class_id = classRow[0]
+                db_curs.execute("SELECT * FROM b_subjects WHERE subject_name = %s AND class_id = %s LIMIT 1",
+                                        (subject_name, class_id))
+                subjectRow = db_curs.fetchone
+                if len(subjectRow) == 1:
+                    flash(
+                        f"{SUBJECTS[subjectCode]} subject already asigned to {className}", "danger")
+                    return redirect("/bsubjects")
+                # Else asign subject to a class
+                subject_name = SUBJECTS[subjectCode]
+                db_curs.execute("INSERT INTO b_subjects (subject_name, subject_code, teacher_id, class_id) VALUES(%s, %s, %s, %s)",
+                           (subject_name, subjectCode, userid, class_id))
+                db_curs.commit()
+                flash(
+                    f"{SUBJECTS[subjectCode]} subject asigned to {className}", "success")
+                return redirect("/bsubjects")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -105,31 +363,31 @@ def login():
         
         # Query database for username
         db_connect= storage()
-        db_curs = db_connect.cursor()
-        db_curs.execute("SELECT * FROM users WHERE username = %s",
-                          (request.form.get("username"),))
-        row = db_curs.fetchone()
-        db_curs.close()
-        db_connect.close()
-        # Ensure username exists:
-        if row == None:
-            # missing.append("username and/or password not correct")
-            feedback = f"username and/or password not correct"
-            flash(feedback, "danger")
-            return render_template("login.html")
-        # Ensure username exists and password is correct
-        if row[1] and not check_password_hash(row[2], request.form.get("password")):
-            # missing.append("username and/or password not correct")
-            feedback = f"username and/or password not correct"
-            flash(feedback, "danger")
-            return render_template("login.html")
-        # Remember which user has logged in
-        session["user_id"] = row[0]
+        with db_connect.cursor() as db_curs:
+            db_curs.execute("SELECT * FROM users WHERE username = %s",
+                            (request.form.get("username"),))
+            row = db_curs.fetchone()
+            db_curs.close()
+            db_connect.close()
+            # Ensure username exists:
+            if row == None:
+                # missing.append("username and/or password not correct")
+                feedback = f"username and/or password not correct"
+                flash(feedback, "danger")
+                return render_template("login.html")
+            # Ensure username exists and password is correct
+            if row[1] and not check_password_hash(row[2], request.form.get("password")):
+                # missing.append("username and/or password not correct")
+                feedback = f"username and/or password not correct"
+                flash(feedback, "danger")
+                return render_template("login.html")
+            # Remember which user has logged in
+            session["user_id"] = row[0]
 
-        print("\nRedirect to home page\n")
+            print("\nRedirect to home page\n")
 
-        # Redirect user to home page
-        return redirect("/")
+            # Redirect user to home page
+            return redirect("/")
     else:
 
         print("\nRedirect to login\n")
