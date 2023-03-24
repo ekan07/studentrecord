@@ -80,13 +80,15 @@ CREATE TABLE IF NOT EXISTS students (
     FOREIGN KEY(class_id) REFERENCES classes(id),
     PRIMARY KEY(id));
 
+-- image VARCHAR(256) NOT NULL,
 CREATE TABLE IF NOT EXISTS images (
     id INT UNIQUE NOT NULL AUTO_INCREMENT,
     regnum_id INT NOT NULL,
-    image VARCHAR(256) NOT NULL,
+    image LONGBLOB NOT NULL,
     mimetype VARCHAR(256) NOT NULL,
-    FOREIGN KEY(regnum_id) REFERENCES students(id),
+    FOREIGN KEY(regnum_id) REFERENCES students(reg_num),
     PRIMARY KEY(id));
+    -- FOREIGN KEY(regnum_id) REFERENCES students(id),
 
 CREATE TABLE IF NOT EXISTS unique_ids (
     id INT UNIQUE NOT NULL AUTO_INCREMENT,
@@ -104,8 +106,9 @@ CREATE TABLE IF NOT EXISTS guardians (
     g_address VARCHAR(256) NOT NULL,
     g_email VARCHAR(256) NOT NULL,
     g_phone VARCHAR(256) NOT NULL, 
-    FOREIGN KEY(regnum_id) REFERENCES students(id),
+    FOREIGN KEY(regnum_id) REFERENCES students(reg_num),
     PRIMARY KEY(id));
+    -- FOREIGN KEY(regnum_id) REFERENCES students(id),
 
 
 SHOW DATABASES;

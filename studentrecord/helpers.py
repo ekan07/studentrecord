@@ -76,7 +76,7 @@ def reg_pool(reg_codes):
         reg_sets = set()
         if len(reg_codes) != 0:
             for reg_c in reg_codes:
-                reg_sets.add(reg_c["reg_code"])
+                reg_sets.add(reg_c[0])
 
         # Asign registration number
         poolsets = set(pools)
