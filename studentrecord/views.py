@@ -21,7 +21,6 @@ from models import storage
 # from MySQLdb import escape_string as thwart
 
 
-
 @app.after_request
 def after_request(response):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -70,17 +69,17 @@ SUBJECTS = {
 @login_required
 def index():
     """ List of class(es) Asign to a teacher """
-    db_connect= storage()
+    db_connect = storage()
     db_curs = db_connect.cursor()
 
     userid = session["user_id"]
     print(userid)
     # Query class(es) asigned to teacher
     db_curs.execute("""
-                    SELECT * FROM classes WHERE id 
-                    IN (SELECT class_id FROM students WHERE class_id 
-                    IN (SELECT class_id FROM teachers WHERE userid = %s)) 
-                    AND id IN (SELECT currentclass_id FROM class_details) 
+                    SELECT * FROM classes WHERE id
+                    IN (SELECT class_id FROM students WHERE class_id
+                    IN (SELECT class_id FROM teachers WHERE userid = %s))
+                    AND id IN (SELECT currentclass_id FROM class_details)
                     ORDER BY class_name""", (userid,))
     classes = db_curs.fetchall()
 
@@ -96,17 +95,17 @@ def index():
 @login_required
 def download_csv(class_id):
     """ download csv files of list of students in a specified class """
-    db_connect= storage()
+    db_connect = storage()
     db_curs = db_connect.cursor()
 
     # Query students in a specified class
     user_id = session['user_id']
     id = class_id
     db_curs.execute("""
-                    SELECT reg_num as admission_number, surname, othername, gender FROM people 
-                    JOIN students ON people.id = students.person_id 
-                    JOIN classes ON students.class_id = classes.id 
-                    JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s 
+                    SELECT reg_num as admission_number, surname, othername, gender FROM people
+                    JOIN students ON people.id = students.person_id
+                    JOIN classes ON students.class_id = classes.id
+                    JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s
                     AND classes.id = %s""", (user_id, id))
     students = db_curs.fetchall()
     if len(students) == None:
@@ -136,17 +135,17 @@ def download_csv(class_id):
 @login_required
 def classStudents(class_id):
     """ List of students in a class """
-    db_connect= storage()
+    db_connect = storage()
     db_curs = db_connect.cursor()
 
     # Query students in a specified class
     userid = session['user_id']
     id = class_id
     db_curs.execute("""
-                    SELECT reg_num, surname, othername, gender FROM people 
-                    JOIN students ON people.id = students.person_id 
-                    JOIN classes ON students.class_id = classes.id 
-                    JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s 
+                    SELECT reg_num, surname, othername, gender FROM people
+                    JOIN students ON people.id = students.person_id
+                    JOIN classes ON students.class_id = classes.id
+                    JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s
                     AND classes.id = %s""", (userid, id))
     students = db_curs.fetchall()
 
@@ -163,24 +162,24 @@ def classStudents(class_id):
 @login_required
 def studentprofile(student_regnum):
     """ Display student details on page """
-    db_connect= storage()
+    db_connect = storage()
     with db_connect.cursor() as db_curs:
 
         reg_num = student_regnum
         # Query for student's details
-        # reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth), 
+        # reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth),
         # ANY_VALUE(states), ANY_VALUE(nationality), ANY_VALUE(religion), ANY_VALUE(admsn_date)
         # ANY_VALUE(entryclass_id), currentclass_id, ANY_VALUE(class_status), ANY_VALUE(trans_grad_date)
         db_curs.execute("""
                         SELECT
-                        reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth), 
+                        reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth),
                         ANY_VALUE(states), ANY_VALUE(nationality), ANY_VALUE(religion), ANY_VALUE(admsn_date),
                         ANY_VALUE(entryclass_id), currentclass_id, ANY_VALUE(class_status), ANY_VALUE(trans_grad_date)
-                        FROM people JOIN students ON people.id = students.person_id 
-                        JOIN classes ON students.class_id = classes.id 
-                        JOIN teachers ON classes.id = teachers.class_id 
-                        JOIN class_details ON class_details.currentclass_id = classes.id 
-                        GROUP BY students.reg_num, class_details.currentclass_id 
+                        FROM people JOIN students ON people.id = students.person_id
+                        JOIN classes ON students.class_id = classes.id
+                        JOIN teachers ON classes.id = teachers.class_id
+                        JOIN class_details ON class_details.currentclass_id = classes.id
+                        GROUP BY students.reg_num, class_details.currentclass_id
                         HAVING students.reg_num = %s""", (reg_num,))
         studentDocument = db_curs.fetchone()
 
@@ -188,7 +187,8 @@ def studentprofile(student_regnum):
 
         if studentDocument == None:
             return e_message("Invalid url link", 404)
-        db_curs.execute("SELECT * FROM images WHERE regnum_id = %s", (reg_num,))
+        db_curs.execute(
+            "SELECT * FROM images WHERE regnum_id = %s", (reg_num,))
         image = db_curs.fetchone()
         # Use default image if no uploaded picture
         if image == None:
@@ -211,20 +211,21 @@ def studentprofile(student_regnum):
 
         entryclass_id = studentDocument[9],
         db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
-                                (entryclass_id,))
+                        (entryclass_id,))
         entryClass = db_curs.fetchone()
 
         currentclass_id = studentDocument[10]
         db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
-                                (currentclass_id,))
+                        (currentclass_id,))
         currentClass = db_curs.fetchone()
 
-        regnum_id=student_regnum
-        db_curs.execute("SELECT * FROM guardians WHERE regnum_id = %s", (regnum_id,))
+        regnum_id = student_regnum
+        db_curs.execute(
+            "SELECT * FROM guardians WHERE regnum_id = %s", (regnum_id,))
         guardian = db_curs.fetchone()
 
     db_connect.close()
-    return render_template("/studentprofile.html", imgfile=imgFilePath, 
+    return render_template("/studentprofile.html", imgfile=imgFilePath,
                            studentdocument=studentDocument, entryclass=entryClass,
                            currentclass=currentClass, guardian=guardian)
 
@@ -256,7 +257,7 @@ def asign_classteacher():
         # ALX: change this classID to classcode
         classID = int(asign_classcode(className))
 
-        db_connect= storage()
+        db_connect = storage()
         with db_connect.cursor() as db_curs:
             # Ensure class exist and teacher is not asign to a particular class more than once:
             db_curs.execute(
@@ -269,7 +270,7 @@ def asign_classteacher():
             if classRow != None:
                 class_id = classRow[0]
                 db_curs.execute("SELECT * FROM teachers WHERE class_id = %s AND userid = %s",
-                                        (class_id, userid))
+                                (class_id, userid))
                 teacherRows = db_curs.fetchone()
 
                 print(f"\nteacherRows: {teacherRows}\n")
@@ -281,7 +282,7 @@ def asign_classteacher():
                 else:
                     # Asign class to teacher
                     db_curs.execute("INSERT INTO teachers (class_id, userid) VALUES(%s, %s)",
-                            (class_id, userid))
+                                    (class_id, userid))
                     db_connect.commit()
                     flash(f"{classRow[1]} asigned", "success")
                     return redirect("/")
@@ -290,10 +291,10 @@ def asign_classteacher():
                 id = classID
                 class_name = className
                 db_curs.execute("INSERT INTO classes (id, class_name) VALUES(%s, %s)",
-                        (id, class_name))
+                                (id, class_name))
                 # Asign class to teacher
                 db_curs.execute("INSERT INTO teachers (class_id, userid) VALUES(%s, %s)",
-                        (id, userid))
+                                (id, userid))
                 db_connect.commit()
                 flash(f"{className} asigned", "success")
                 return redirect("/")
@@ -308,14 +309,14 @@ def asign_classteacher():
 def bsubjects():
     """ Get class(es) asigned to teacher """
 
-    db_connect= storage()
+    db_connect = storage()
     with db_connect.cursor() as db_curs:
-        userid=session["user_id"]
+        userid = session["user_id"]
         # Get class(es) asigned to teacher
         db_curs.execute("""
-                        SELECT class_name FROM classes JOIN teachers ON classes.id = teachers.class_id 
-                        JOIN class_details ON class_details.currentclass_id = classes.id 
-                        WHERE teachers.userid = %s 
+                        SELECT class_name FROM classes JOIN teachers ON classes.id = teachers.class_id
+                        JOIN class_details ON class_details.currentclass_id = classes.id
+                        WHERE teachers.userid = %s
                         GROUP BY class_details.currentclass_id""", (userid,))
         classRows = db_curs.fetchall()
 
@@ -341,9 +342,9 @@ def bsubject():
         # Get class(es) asigned to teacher
         userid = session["user_id"]
         db_curs.execute("""
-                        SELECT classes.id, class_name FROM classes 
-                        JOIN teachers ON classes.id = teachers.class_id 
-                        JOIN class_details ON class_details.currentclass_id = classes.id 
+                        SELECT classes.id, class_name FROM classes
+                        JOIN teachers ON classes.id = teachers.class_id
+                        JOIN class_details ON class_details.currentclass_id = classes.id
                         WHERE teachers.userid = %s GROUP BY class_details.currentclass_id
                         """, (userid,))
         classRows = db_curs.fetchall()
@@ -392,7 +393,7 @@ def bsubject():
                 # Else asign subject to a class
                 subject_name = SUBJECTS[subjectCode]
                 db_curs.execute("""
-                                INSERT INTO b_subjects (subject_name, subject_code, teacher_id, class_id) 
+                                INSERT INTO b_subjects (subject_name, subject_code, teacher_id, class_id)
                                 VALUES(%s, %s, %s, %s)""", (subject_name, subjectCode, userid, class_id))
                 db_connect.commit()
                 db_curs.close()
@@ -406,7 +407,7 @@ def bsubject():
 @login_required
 def offer_bsubjects():
     """ List of students for subject registration """
-    db_connect= storage()
+    db_connect = storage()
     with db_connect.cursor() as db_curs:
         if request.method == "POST":
             classid_subjtname = request.form.get("classid_subjtname")
@@ -416,29 +417,31 @@ def offer_bsubjects():
                 return redirect("/offer_bsubjects")
             # Split input data
             classID = request.form.get("classid_subjtname").rsplit(",", 1)[0]
-            subjectName = request.form.get("classid_subjtname").rsplit(",", 1)[1]
+            subjectName = request.form.get(
+                "classid_subjtname").rsplit(",", 1)[1]
 
             # Query students in a specified class
             userid = session['user_id']
             db_curs.execute("""
-                            SELECT students.reg_num, surname, othername FROM people 
-                            JOIN students ON people.id = students.person_id 
-                            JOIN classes ON students.class_id = classes.id 
-                            JOIN teachers ON classes.id = teachers.class_id 
-                            JOIN class_details ON class_details.currentclass_id = classes.id 
-                            WHERE teachers.userid = %s AND currentclass_id = %s""", (userid, classID))
+                            SELECT students.reg_num, ANY_VALUE(surname), ANY_VALUE(othername) FROM people
+                            JOIN students ON people.id = students.person_id
+                            JOIN classes ON students.class_id = classes.id
+                            JOIN teachers ON classes.id = teachers.class_id
+                            JOIN class_details ON class_details.currentclass_id = classes.id
+                            WHERE teachers.userid = %s AND currentclass_id = %s
+                            GROUP BY students.reg_num""", (userid, classID))
             students = db_curs.fetchall()
 
             print(f'\nstudents: {students}\n')
-            
+
             db_curs.execute("SELECT * FROM classes")
             classRows = db_curs.fetchall()
             db_curs.execute("""
-                            SELECT ANY_VALUE(b_subjects.id), subject_name, ANY_VALUE(subject_code), 
-                            ANY_VALUE(b_subjects.class_id), class_name 
-                            FROM b_subjects JOIN classes ON b_subjects.class_id = classes.id 
-                            JOIN teachers ON b_subjects.teacher_id = teachers.userid 
-                            GROUP BY subject_name, userid, class_name HAVING userid = %s 
+                            SELECT ANY_VALUE(b_subjects.id), subject_name, ANY_VALUE(subject_code),
+                            ANY_VALUE(b_subjects.class_id), class_name
+                            FROM b_subjects JOIN classes ON b_subjects.class_id = classes.id
+                            JOIN teachers ON b_subjects.teacher_id = teachers.userid
+                            GROUP BY subject_name, userid, class_name HAVING userid = %s
                             ORDER BY class_name""", (userid,))
             asignedClassSubjectRows = db_curs.fetchall()
 
@@ -477,18 +480,18 @@ def offer_bsubjects():
                 ASIGNED_CLASS_SUBJECT_ROWS.append(asignedClassSubjectRow)
             # To dynamically change URL of action attribute on form
             url = "register_bsubjects"
-            return render_template("/registerbsubjects.html", 
-                                students=students, registeredstudentids=REGISTERED_STUDENT_IDS,
-                                asigned_class_subjects=ASIGNED_CLASS_SUBJECT_ROWS, subject_name=subjectName, 
-                                class_id=classID, url=url)
+            return render_template("/registerbsubjects.html",
+                                   students=students, registeredstudentids=REGISTERED_STUDENT_IDS,
+                                   asigned_class_subjects=ASIGNED_CLASS_SUBJECT_ROWS, subject_name=subjectName,
+                                   class_id=classID, url=url)
         # If request.method is GET:
         # -------------------------
         userid = session["user_id"]
         db_curs.execute("""
-                        SELECT subject_name, ANY_VALUE(b_subjects.class_id), class_name FROM b_subjects 
-                        JOIN classes ON b_subjects.class_id = classes.id 
-                        JOIN teachers ON b_subjects.teacher_id = teachers.userid 
-                        GROUP BY subject_name, userid, class_name HAVING userid = %s 
+                        SELECT subject_name, ANY_VALUE(b_subjects.class_id), class_name FROM b_subjects
+                        JOIN classes ON b_subjects.class_id = classes.id
+                        JOIN teachers ON b_subjects.teacher_id = teachers.userid
+                        GROUP BY subject_name, userid, class_name HAVING userid = %s
                         ORDER BY class_name""", (userid,))
         asignedClassSubjectRows = db_curs.fetchall()
 
@@ -502,8 +505,58 @@ def offer_bsubjects():
         url = "offer_bsubjects"
         # To temporary hide student registering form in HTML
         # temp_hide_form = "tdisplay"
-        return render_template("/registerbsubjects.html", 
-                            url=url, asigned_class_subjects=ASIGNED_CLASS_SUBJECT_ROWS)
+        return render_template("/registerbsubjects.html",
+                               url=url, asigned_class_subjects=ASIGNED_CLASS_SUBJECT_ROWS)
+
+
+@app.route("/register_bsubjects", methods=["GET", "POST"])
+@login_required
+def register_bsubjects():
+    """ Register students for a class subject """
+
+    if request.method == "POST":
+        db_connect = storage()
+        with db_connect.cursor() as db_curs:
+            classID = request.form.get("class_id")
+            subject_name = request.form.get("subject_name")
+            checkedStudentIDs = request.form.getlist("reg_num")
+            # Ensure checkbox(es) is/are checked
+            if len(checkedStudentIDs) == 0:
+                flash("Ensure checkboxe(s) is/are checked", "danger")
+                return redirect("/offer_bsubjects")
+            # Asign scool session
+            schoolSession = school_session()
+            userid = session["user_id"]
+            db_curs.execute("""
+                            SELECT ANY_VALUE(b_subjects.id), subject_name, ANY_VALUE(subject_code) FROM b_subjects
+                            JOIN classes ON b_subjects.class_id = classes.id
+                            JOIN teachers ON classes.id = teachers.class_id
+                            JOIN class_details ON classes.id = class_details.currentclass_id
+                            WHERE teachers.userid = %s AND subject_name = %s
+                            AND class_details.currentclass_id = %s
+                            GROUP BY subject_name, class_details.currentclass_id""",
+                            (userid, subject_name, classID))
+            bsubjectRow = db_curs.fetchone()
+            # Query class asigned to teacher
+            db_curs.execute("""
+                            SELECT * FROM classes
+                            WHERE id = (SELECT class_id FROM teachers WHERE userid = %s
+                            AND class_id = %s)""", (userid, classID))
+            classRow = db_curs.fetchone()
+            # Asign subject code name
+            classCode = asign_classcode(classRow[1])
+            subjectCodeName = bsubjectRow[2] + classCode
+            subject_id = bsubjectRow[0]
+            # Register each students for the subject
+            for checkedStudentID in checkedStudentIDs:
+                db_curs.execute("""
+                                INSERT INTO subject_offering (subjectcode_name, sch_session, subject_id, student_id)
+                                VALUES(%s, %s, %s, %s)""",
+                                (subjectCodeName, schoolSession, subject_id, checkedStudentID))
+            db_connect.commit()
+            flash(
+                f"All checked {classRow[1]} student(s) have been registered for {bsubjectRow[1]} subject", "success")
+            return redirect("/offer_bsubjects")
 
 
 @app.route("/uploadimg/<int:reg_num>", methods=["GET", "POST"])
@@ -528,7 +581,7 @@ def uploadimg(reg_num):
                 # Ensuring the filename itself isn't dangerous
                 filename = secure_filename(image.filename)
 
-                db_connect= storage()
+                db_connect = storage()
                 with db_connect.cursor() as db_curs:
                     # Ensure student exist
                     db_curs.execute(
@@ -544,7 +597,7 @@ def uploadimg(reg_num):
                     #     binaryimg= f.read()
                         # Add fields to images table
                     db_curs.execute("INSERT INTO images (regnum_id, image, mimetype) VALUES(%s, %s, %s)",
-                            (reg_num, image.read(), image.mimetype))
+                                    (reg_num, image.read(), image.mimetype))
                     db_connect.commit()
 
                     print(f'\nImage saved\n')
@@ -563,7 +616,7 @@ def uploadimg(reg_num):
 def studentdetails():
 
     userid = session['user_id']
-    db_connect= storage()
+    db_connect = storage()
     db_curs = db_connect.cursor()
     if request.method == "POST":
         missing = list()
@@ -636,7 +689,8 @@ def studentdetails():
             flash("Couldn't asign registration number", "danger")
             return render_template("studentdetails.html")
 
-        db_curs.execute("SELECT * FROM classes WHERE class_name = %s", (className,))
+        db_curs.execute(
+            "SELECT * FROM classes WHERE class_name = %s", (className,))
         classRow = db_curs.fetchone()
 
         print(f'\nclassRow: {classRow}\n')
@@ -705,7 +759,7 @@ def studentdetails():
     db_curs.execute("""
                     SELECT class_name FROM classes WHERE id IN
                     (SELECT class_id FROM teachers WHERE userid = %s)
-                    ORDER BY class_name""", ( userid,))
+                    ORDER BY class_name""", (userid,))
     classNames = db_curs.fetchall()
     db_curs.close()
     db_connect.close()
@@ -738,12 +792,12 @@ def guardians(regnum_id):
         names = request.form.get("g_name").rsplit()
         for name in names:
             g_name += f"{name.capitalize()} "
-        db_connect= storage()
+        db_connect = storage()
         with db_connect.cursor() as db_curs:
             db_curs.execute("""
                     INSERT INTO guardians (regnum_id, g_name, g_address, g_email, g_phone)
                     VALUES(%s, %s, %s, %s, %s)""",
-                    (regnum_id, g_name.strip(), g_address.strip(), email, phone))
+                            (regnum_id, g_name.strip(), g_address.strip(), email, phone))
             db_connect.commit()
         flash("Guardians details saved", "success")
         return redirect("/")
@@ -770,7 +824,7 @@ def login():
             return render_template("login.html")
 
         # Query database for username
-        db_connect= storage()
+        db_connect = storage()
         with db_connect.cursor() as db_curs:
             db_curs.execute("SELECT * FROM users WHERE username = %s",
                             (request.form.get("username"),))
@@ -801,6 +855,16 @@ def login():
         print("\nRedirect to login\n")
 
         return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    """Log user out"""
+
+    # Forget any user_id
+    session.clear()
+    # Redirect user to login form
+    return redirect("/")
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -838,7 +902,8 @@ def signup():
         db_connect = storage()
         with db_connect.cursor() as db_curs:
             # db_curs = db_connect.cursor()
-            db_curs.execute("SELECT * FROM users WHERE username = %s", (username,))
+            db_curs.execute(
+                "SELECT * FROM users WHERE username = %s", (username,))
             row = db_curs.fetchone()
             if row == None:
                 # Check if passwords matches
@@ -875,5 +940,3 @@ def signup():
                     print("\nusername exist\n")
 
                     return render_template("signup.html")
-
-

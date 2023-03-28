@@ -18,7 +18,6 @@ class Config(object):
     # MIN_IMAGE_FILESIZE = 2 * 1024 * 1024
 
     # The absolute path of the directory containing CSV files for users to download
-    # i.e "/home/ekan07/alx-repos/demoalxfinal/project/"
     CLIENT_CSV = os.path.dirname(os.path.abspath(__file__))
 
 

@@ -41,13 +41,13 @@ Register Subject
             {% for student in students %}
             <tr>
                 <td>{{ loop.index }}</td>
-                <td>{{ student["reg_num"] }}</td>
-                <td>{{ student["othername"] +" "+ student["surname"] }}</td>
+                <td>{{ student[0] }}</td>
+                <td>{{ student[2] +" "+ student[1] }}</td>
 
-                {% if student['reg_num'] in registeredstudentids %}
+                {% if student[0] in registeredstudentids %}
                 <td class="registered">registered</td>
                 {% else %}
-                <td><input name="reg_num" type="checkbox" value="{{ student['reg_num'] }}" id="reg_num"></td>
+                <td><input name="reg_num" type="checkbox" value="{{ student[0] }}" id="reg_num"></td>
                 {% endif %}
             </tr>
             {% endfor %}
