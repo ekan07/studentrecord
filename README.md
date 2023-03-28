@@ -1,8 +1,8 @@
-# STUDENT AND SUBJECT REGISTRATION
+# STUDENT RECORDS 
 
-#### Video Demo:  <https://youtu.be/yk1ZL8lAwQ8>
+#### Video Demo:
 
-### Description:
+### Project Description:
 
 #### Menu
 1. Sign Up
