@@ -119,3 +119,11 @@ Database Tables:
 - class_details
 - images
 - guardians
+
+
+
+### Team Members
+- Aniekan Boniface
+- Akinpelu Faith
+- Alade Toheeb
+- Osauzo Efezino
