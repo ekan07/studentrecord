@@ -14,10 +14,7 @@ from werkzeug.exceptions import default_exceptions, HTTPException, InternalServe
 from werkzeug.security import check_password_hash, generate_password_hash
 from studentrecord.helpers import login_required, allowed_image_filesize, allowed_image, reg_pool, email_address_valid, e_message, asign_classcode, school_session
 from werkzeug.utils import secure_filename
-#####
-# from models.engine.db_storage import mysqlconnect
 from models import storage
-# used to protect against SQL injection attempts
 # from MySQLdb import escape_string as thwart
 
 
@@ -34,10 +31,6 @@ app.config["SESSION_FILE_DIR"] = mkdtemp()
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
-
-# Configure CS50 Library to use SQLite database
-# db = SQL("sqlite:///studentreg.db")
-# from models.engine.db_storage import mysqlconnect
 
 # Generate a secret random key for the session
 app.secret_key = os.urandom(24)
@@ -69,11 +62,10 @@ SUBJECTS = {
 @login_required
 def index():
     """ List of class(es) Asign to a teacher """
-    db_connect = storage()
-    db_curs = db_connect.cursor()
 
     userid = session["user_id"]
-    print(userid)
+    db_connect = storage()
+    db_curs = db_connect.cursor()
     # Query class(es) asigned to teacher
     db_curs.execute("""
                     SELECT * FROM classes WHERE id
@@ -82,12 +74,8 @@ def index():
                     AND id IN (SELECT currentclass_id FROM class_details)
                     ORDER BY class_name""", (userid,))
     classes = db_curs.fetchall()
-
-    print(f'\nclasses: {classes}\n')
-
     db_curs.close()
     db_connect.close()
-    # db.close()
     return render_template("/index.html", classes=classes)
 
 
@@ -95,12 +83,12 @@ def index():
 @login_required
 def download_csv(class_id):
     """ download csv files of list of students in a specified class """
-    db_connect = storage()
-    db_curs = db_connect.cursor()
 
-    # Query students in a specified class
     user_id = session['user_id']
     id = class_id
+    db_connect = storage()
+    db_curs = db_connect.cursor()
+    # Query students in a specified class
     db_curs.execute("""
                     SELECT reg_num as admission_number, surname, othername, gender FROM people
                     JOIN students ON people.id = students.person_id
@@ -110,23 +98,19 @@ def download_csv(class_id):
     students = db_curs.fetchall()
     if len(students) == None:
         return e_message("Not authorized", 404)
-    db_curs.execute("SELECT class_name FROM classes WHERE id = :id", (id,))
+    db_curs.execute("SELECT class_name FROM classes WHERE id = %s", (id,))
     classRow = db_curs.fetchone()
     db_curs.close()
     db_connect.close()
-    # field names
     fields = ['admission_number', 'surname', 'othername', 'gender']
     # name for csv file to be created
-    filename = classRow[1] + ".csv"
-    # writing to csv file
+    filename = classRow[0] + ".csv"
     csv_path = Path("studentrecord", "static", "client", "csv")
     with open(Path(csv_path, filename), 'w', encoding="utf-8") as csvfile:
-        # creating a csv dict writer object
-        writer = csv.DictWriter(csvfile, fieldnames=fields)
-        # writing headers (field names)
-        writer.writeheader()
-        # writing data rows
-        writer.writerows(students)
+        # creating a csv writer object
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(fields)
+        csvwriter.writerows(students)
     # Download the csv file
     return send_from_directory(app.config["CLIENT_CSV"], Path(csv_path, filename), as_attachment=True)
 
@@ -135,12 +119,12 @@ def download_csv(class_id):
 @login_required
 def classStudents(class_id):
     """ List of students in a class """
-    db_connect = storage()
-    db_curs = db_connect.cursor()
 
-    # Query students in a specified class
     userid = session['user_id']
     id = class_id
+    db_connect = storage()
+    db_curs = db_connect.cursor()
+    # Query students in a specified class
     db_curs.execute("""
                     SELECT reg_num, surname, othername, gender FROM people
                     JOIN students ON people.id = students.person_id
@@ -148,9 +132,6 @@ def classStudents(class_id):
                     JOIN teachers ON classes.id = teachers.class_id WHERE teachers.userid = %s
                     AND classes.id = %s""", (userid, id))
     students = db_curs.fetchall()
-
-    print(f'students: {students}')
-
     db_curs.close()
     db_connect.close()
     if len(students) == None:
@@ -164,12 +145,8 @@ def studentprofile(student_regnum):
     """ Display student details on page """
     db_connect = storage()
     with db_connect.cursor() as db_curs:
-
         reg_num = student_regnum
         # Query for student's details
-        # reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth),
-        # ANY_VALUE(states), ANY_VALUE(nationality), ANY_VALUE(religion), ANY_VALUE(admsn_date)
-        # ANY_VALUE(entryclass_id), currentclass_id, ANY_VALUE(class_status), ANY_VALUE(trans_grad_date)
         db_curs.execute("""
                         SELECT
                         reg_num, ANY_VALUE(surname), ANY_VALUE(othername), ANY_VALUE(gender), ANY_VALUE(date_of_birth),
@@ -182,9 +159,6 @@ def studentprofile(student_regnum):
                         GROUP BY students.reg_num, class_details.currentclass_id
                         HAVING students.reg_num = %s""", (reg_num,))
         studentDocument = db_curs.fetchone()
-
-        print(f'studentDocument: {studentDocument}')
-
         if studentDocument == None:
             return e_message("Invalid url link", 404)
         db_curs.execute(
@@ -192,33 +166,27 @@ def studentprofile(student_regnum):
         image = db_curs.fetchone()
         # Use default image if no uploaded picture
         if image == None:
-            # gender [3]
             if studentDocument[3].lower() == 'female':
                 # Image storage path
                 imgFilePath = "img/default/female.png"
             elif studentDocument[3].lower() == 'male':
-                # Image storage path
                 imgFilePath = "img/default/male.jpg"
         else:
             # Split the extension from the filename (mimetype [3])
             img_exsn = image[3].rsplit("/", 1)[1]
-            # Image storage path (regnum_id [1])
             imgFilePath = "img/uploads/basic/" + \
                 str(image[1]) + "." + img_exsn
             # Write image to storage path (image [2])
             with open("studentrecord/static/" + imgFilePath, "wb") as file:
                 file.write(image[2])
-
         entryclass_id = studentDocument[9],
         db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
                         (entryclass_id,))
         entryClass = db_curs.fetchone()
-
         currentclass_id = studentDocument[10]
         db_curs.execute("SELECT class_name FROM classes WHERE id = %s",
                         (currentclass_id,))
         currentClass = db_curs.fetchone()
-
         regnum_id = student_regnum
         db_curs.execute(
             "SELECT * FROM guardians WHERE regnum_id = %s", (regnum_id,))
@@ -239,7 +207,6 @@ def asign_classteacher():
         className = request.form.get("classname")
         missing = list()
         # Ensure field(s) was submitted (key : value):
-        # -------------------------------------------
         for k, v in request.form.items():
             if not v:
                 missing.append(k)
@@ -254,29 +221,20 @@ def asign_classteacher():
         if className not in CLASSNAMES:
             return e_message("Invalid Class Name", 404)
 
-        # ALX: change this classID to classcode
         classID = int(asign_classcode(className))
-
+        userid = session['user_id']
         db_connect = storage()
         with db_connect.cursor() as db_curs:
-            # Ensure class exist and teacher is not asign to a particular class more than once:
             db_curs.execute(
                 "SELECT * FROM classes WHERE class_name = %s", (className,))
             classRow = db_curs.fetchone()
-
-            print(f"\nclassRow{classRow}\n")
-
-            userid = session['user_id']
+            # Ensure class exist and teacher is not asign to a particular class more than once:
             if classRow != None:
                 class_id = classRow[0]
                 db_curs.execute("SELECT * FROM teachers WHERE class_id = %s AND userid = %s",
                                 (class_id, userid))
                 teacherRows = db_curs.fetchone()
-
-                print(f"\nteacherRows: {teacherRows}\n")
-
                 if len(teacherRows) != None:
-                    # 'class_name' [1]
                     flash(f"{classRow[1]} already asigned", "danger")
                     return redirect("/asign_classteacher")
                 else:
@@ -287,9 +245,9 @@ def asign_classteacher():
                     flash(f"{classRow[1]} asigned", "success")
                     return redirect("/")
             else:
-                # Asign class
                 id = classID
                 class_name = className
+                # Asign class
                 db_curs.execute("INSERT INTO classes (id, class_name) VALUES(%s, %s)",
                                 (id, class_name))
                 # Asign class to teacher
@@ -325,7 +283,6 @@ def bsubjects():
         ASIGNEDCLASSES = []
         for classRow in classRows:
             for classname in CLASSNAMES:
-                # "class_name"
                 if classRow[0] == classname:
                     ASIGNEDCLASSES.append(classname)
     return render_template("/bsubjects.html", asignedclasses=ASIGNEDCLASSES, subjects=SUBJECTS)
@@ -337,10 +294,10 @@ def bsubject():
     """ Asign subject to a class """
 
     if request.method == "POST":
+        userid = session["user_id"]
         db_connect = storage()
         db_curs = db_connect.cursor()
         # Get class(es) asigned to teacher
-        userid = session["user_id"]
         db_curs.execute("""
                         SELECT classes.id, class_name FROM classes
                         JOIN teachers ON classes.id = teachers.class_id
@@ -348,12 +305,8 @@ def bsubject():
                         WHERE teachers.userid = %s GROUP BY class_details.currentclass_id
                         """, (userid,))
         classRows = db_curs.fetchall()
-
-        print(f'\nsecond classRows: {classRows}\n')
-
         ASIGNEDCLASSES = []
         for classRow in classRows:
-            # "class_name"
             if classRow[1] in CLASSNAMES:
                 ASIGNEDCLASSES.append(classRow[1])
 
@@ -374,18 +327,13 @@ def bsubject():
 
         # Insert data into b_subject table
         for classRow in classRows:
-            # "class_name"
             if classRow[1] == className:
-                # Check if subject has been asigned to a class
                 subject_name = SUBJECTS[subjectCode]
-                print(f'\nsubjectCode: {subjectCode}\n')
                 class_id = classRow[0]
                 db_curs.execute("SELECT * FROM b_subjects WHERE subject_name = %s AND class_id = %s LIMIT 1",
                                 (subject_name, class_id))
                 subjectRow = db_curs.fetchone()
-
-                print(f'\nsubjectRow: {subjectRow}\n')
-
+                # Check if subject has been asigned to a class
                 if subjectRow != None:
                     flash(
                         f"{SUBJECTS[subjectCode]} subject already asigned to {className}", "danger")
@@ -411,17 +359,16 @@ def offer_bsubjects():
     with db_connect.cursor() as db_curs:
         if request.method == "POST":
             classid_subjtname = request.form.get("classid_subjtname")
-            # Ensure subject is selected
-            if classid_subjtname == None:
-                flash("Please select subject", "danger")
-                return redirect("/offer_bsubjects")
+            userid = session['user_id']
             # Split input data
             classID = request.form.get("classid_subjtname").rsplit(",", 1)[0]
             subjectName = request.form.get(
                 "classid_subjtname").rsplit(",", 1)[1]
-
+            # Ensure subject is selected
+            if classid_subjtname == None:
+                flash("Please select subject", "danger")
+                return redirect("/offer_bsubjects")
             # Query students in a specified class
-            userid = session['user_id']
             db_curs.execute("""
                             SELECT students.reg_num, ANY_VALUE(surname), ANY_VALUE(othername) FROM people
                             JOIN students ON people.id = students.person_id
@@ -431,9 +378,6 @@ def offer_bsubjects():
                             WHERE teachers.userid = %s AND currentclass_id = %s
                             GROUP BY students.reg_num""", (userid, classID))
             students = db_curs.fetchall()
-
-            print(f'\nstudents: {students}\n')
-
             db_curs.execute("SELECT * FROM classes")
             classRows = db_curs.fetchall()
             db_curs.execute("""
@@ -444,13 +388,10 @@ def offer_bsubjects():
                             GROUP BY subject_name, userid, class_name HAVING userid = %s
                             ORDER BY class_name""", (userid,))
             asignedClassSubjectRows = db_curs.fetchall()
-
-            print(f'\nasignedClassSubjectRows: {asignedClassSubjectRows}\n')
-
-            # Get classCode, bsubjectId, subject_code from a specified classID
             classCode = ""
             bsubjectId = 0
             subject_code = ""
+            # Get classCode, bsubjectId, subject_code from a specified classID
             for asignedClassSubjectRow in asignedClassSubjectRows:
                 if asignedClassSubjectRow[1] == subjectName and asignedClassSubjectRow[3] == int(classID):
                     classCode = asign_classcode(
@@ -468,9 +409,6 @@ def offer_bsubjects():
                                 AND subjectcode_name = %s ORDER BY student_id""",
                                 (bsubjectId, subjectCodeName))
                 studentIds = db_curs.fetchall()
-
-                print(f'\nstudentIds: {studentIds}\n')
-
                 if studentIds != None:
                     for studentId in studentIds:
                         REGISTERED_STUDENT_IDS.append(studentId[4])
@@ -484,8 +422,7 @@ def offer_bsubjects():
                                    students=students, registeredstudentids=REGISTERED_STUDENT_IDS,
                                    asigned_class_subjects=ASIGNED_CLASS_SUBJECT_ROWS, subject_name=subjectName,
                                    class_id=classID, url=url)
-        # If request.method is GET:
-        # -------------------------
+
         userid = session["user_id"]
         db_curs.execute("""
                         SELECT subject_name, ANY_VALUE(b_subjects.class_id), class_name FROM b_subjects
@@ -494,9 +431,6 @@ def offer_bsubjects():
                         GROUP BY subject_name, userid, class_name HAVING userid = %s
                         ORDER BY class_name""", (userid,))
         asignedClassSubjectRows = db_curs.fetchall()
-
-        print(f'\nasignedClassSubjectRows: {asignedClassSubjectRows}\n')
-
         # List of subjects asigned to specified class(es)
         ASIGNED_CLASS_SUBJECT_ROWS = []
         for asignedClassSubjectRow in asignedClassSubjectRows:
